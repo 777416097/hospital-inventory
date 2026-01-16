@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> 
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png">
+    <title>نظام جرد المستشفى الذكي - النسخة الكاملة</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script> 
+    <script src="https://unpkg.com/html5-qrcode"></script> 
+
+    <style>
+        :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; --danger: #e74c3c; --warning: #f1c40f; --archive: #8e44ad; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; direction: rtl; }
+        .container { max-width: 1000px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: var(--primary); border-bottom: 2px solid var(--secondary); padding-bottom: 10px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 15px; }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-weight: bold; margin-bottom: 5px; font-size: 0.9em; color: #555; }
+        input, select { padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; transition: 0.3s; }
+        input:focus { border-color: var(--secondary); }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+        button { border: none; padding: 12px; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; flex: 1; min-width: 120px; transition: 0.3s; }
+        .btn-save { background: var(--secondary); }
+        .btn-excel { background: var(--success); }
+        .btn-archive-toggle { background: var(--archive); }
+        #reader { width: 100%; max-width: 400px; margin: 10px auto; display: none; border: 3px solid var(--secondary); border-radius: 12px; }
+        .search-box { width: 100%; padding: 15px; margin-bottom: 15px; border: 2px solid #eee; border-radius: 30px; text-align: center; font-size: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
+        th { background: var(--primary); color: white; }
+        .asset-img { width: 50px; height: 50px; object-fit: cover; border-radius: 5px; }
+        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; color: white; }
+        .mode-indicator { text-align: center; padding: 10px; margin-bottom: 10px; border-radius: 8px; font-weight: bold; }
+    </style>
+</head>
+<body> 
+
+<div class="container">
+    <h2>🏥 نظام جرد المستشفى الذكي</h2> 
+
+    <div id="ui-mode" class="mode-indicator" style="background: #e1f5fe; color: #0288d1;">القائمة النشطة</div>
+
+    <div class="no-print">
+        <input type="hidden" id="edit-id">
+        <div id="reader"></div> 
+        <div class="form-grid">
+            <div class="form-group"><label>الصنف</label><input type="text" id="assetName"></div>
+            <div class="form-group"><label>الباركود</label><input type="text" id="assetBarcode" onfocus="startScanner()"></div>
+            <div class="form-group"><label>القسم</label><input type="text" id="assetDept"></div>
+            <div class="form-group"><label>الكمية</label><input type="number" id="assetQty" value="1"></div>
+            <div class="form-group">
+                <label>الحالة</label>
+                <select id="assetStatus">
+                    <option>جديد</option><option>مستعمل</option><option>صيانة</option><option>تالف</option>
+                </select>
+            </div>
+            <div class="form-group"><label>الصورة</label><input type="file" id="assetImage" accept="image/*"></div>
+        </div> 
+
+        <div class="btn-group">
+            <button onclick="handleSave()" class="btn-save" id="saveBtn">💾 حفظ البيانات</button>
+            <button onclick="exportToExcel()" class="btn-excel">📊 تصدير Excel</button>
+            <button onclick="toggleArchiveMode()" class="btn-archive-toggle" id="archiveToggleBtn">📂 عرض الأرشيف</button>
+        </div> 
+
+        <input type="text" id="searchInput" onkeyup="searchTable()" class="search-box" placeholder="🔍 ابحث بالاسم، الباركود أو القسم...">
+    </div> 
+
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr><th>الصورة</th><th>الصنف</th><th>الباركود</th><th>القسم</th><th>الكمية</th><th>إجراء</th></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div> 
+
+<script>
+    // --- إعدادات Firebase ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDqF69vfiboCuIyJmT73ftwu0zUOeqGAqQ",
+        authDomain: "hospital-app-69f54.firebaseapp.com",
+        projectId: "hospital-app-69f54",
+        databaseURL: "https://hospital-app-69f54-default-rtdb.firebaseio.com",
+        storageBucket: "hospital-app-69f54.firebasestorage.app",
+        messagingSenderId: "304416015250",
+        appId: "1:304416015250:web:c327a0e6120ed2a19d374b"
+    }; 
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database(); 
+
+    let isArchiveMode = false;
+
+    // --- تشغيل الكاميرا ---
+    let html5QrCode;
+    async function startScanner() {
+        if(document.getElementById('assetBarcode').value !== "") return;
+        document.getElementById('reader').style.display = 'block';
+        html5QrCode = new Html5Qrcode("reader");
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (text) => {
+                document.getElementById('assetBarcode').value = text;
+                stopScanner();
+                document.getElementById('assetDept').focus();
+            });
+        } catch (e) { document.getElementById('reader').style.display = 'none'; }
+    }
+    function stopScanner() { if(html5QrCode) html5QrCode.stop().then(()=> document.getElementById('reader').style.display='none'); }
+
+    // --- معالجة الصور ---
+    async function compressImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 300; canvas.height = (img.height * 300) / img.width;
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                };
+            };
+        });
+    }
+
+    // --- الحفظ والأرشفة ---
+    async function handleSave() {
+        const id = document.getElementById('edit-id').value;
+        const file = document.getElementById('assetImage').files[0];
+        let imageData = "";
+        
+        if(file) imageData = await compressImage(file);
+        else if(id) {
+            const snap = await db.ref('assets/' + id).once('value');
+            imageData = snap.val().image || "";
+        }
+
+        const data = {
+            name: document.getElementById('assetName').value,
+            barcode: document.getElementById('assetBarcode').value,
+            dept: document.getElementById('assetDept').value,
+            qty: document.getElementById('assetQty').value,
+            status: document.getElementById('assetStatus').value,
+            image: imageData,
+            archived: false
+        };
+
+        if(!data.name || !data.barcode) return alert("الاسم والباركود مطلوبان");
+
+        if(id) await db.ref('assets/' + id).update(data);
+        else await db.ref('assets').push(data);
+        resetForm();
+    }
+
+    function archiveAsset(id) {
+        if(confirm("نقل الصنف للأرشيف؟")) db.ref('assets/' + id).update({ archived: true });
+    }
+
+    function restoreAsset(id) {
+        if(confirm("استعادة الصنف للقائمة النشطة؟")) db.ref('assets/' + id).update({ archived: false });
+    }
+
+    // --- نظام العرض المتغير (نشط / مؤرشف) ---
+    function toggleArchiveMode() {
+        isArchiveMode = !isArchiveMode;
+        const btn = document.getElementById('archiveToggleBtn');
+        const indicator = document.getElementById('ui-mode');
+        
+        if(isArchiveMode) {
+            btn.innerText = "🔙 العودة للنشط";
+            indicator.innerText = "📂 سجلات الأرشيف (المحذوفات)";
+            indicator.style.background = "#f3e5f5"; indicator.style.color = "#7b1fa2";
+        } else {
+            btn.innerText = "📂 عرض الأرشيف";
+            indicator.innerText = "القائمة النشطة";
+            indicator.style.background = "#e1f5fe"; indicator.style.color = "#0288d1";
+        }
+        loadData();
+    }
+
+    function loadData() {
+        db.ref('assets').on('value', (snapshot) => {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = "";
+            snapshot.forEach((child) => {
+                const item = child.val();
+                if(item.archived !== isArchiveMode) return;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><img src="${item.image || 'https://via.placeholder.com/50'}" class="asset-img"></td>
+                        <td>${item.name}</td><td>${item.barcode}</td><td>${item.dept}</td><td>${item.qty}</td>
+                        <td class="action-btns">
+                            ${isArchiveMode ? 
+                                `<button onclick="restoreAsset('${child.key}')" style="background:var(--success)">🔄 استعادة</button>` : 
+                                `<button onclick="editAsset('${child.key}')" style="background:var(--warning);color:black">📝</button>
+                                 <button onclick="archiveAsset('${child.key}')" style="background:var(--danger)">🗑️</button>`
+                            }
+                        </td>
+                    </tr>`;
+            });
+        });
+    }
+
+    // --- تعديل وبحث ---
+    async function editAsset(id) {
+        const snap = await db.ref('assets/' + id).once('value');
+        const item = snap.val();
+        document.getElementById('assetName').value = item.name;
+        document.getElementById('assetBarcode').value = item.barcode;
+        document.getElementById('assetDept').value = item.dept;
+        document.getElementById('assetQty').value = item.qty;
+        document.getElementById('edit-id').value = id;
+        document.getElementById('saveBtn').innerText = "🔄 تحديث";
+        window.scrollTo(0,0);
+    }
+
+    function resetForm() {
+        document.querySelectorAll('input').forEach(i => i.value="");
+        document.getElementById('edit-id').value = "";
+        document.getElementById('saveBtn').innerText = "💾 حفظ البيانات";
+    }
+
+    function searchTable() {
+        let val = document.getElementById('searchInput').value.toLowerCase();
+        document.querySelectorAll("#tableBody tr").forEach(tr => {
+            tr.style.display = tr.innerText.toLowerCase().includes(val) ? "" : "none";
+        });
+    }
+
+    // --- تصدير إكسل لجميع الصفوف ---
+    async function exportToExcel() {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('جرد المستشفى');
+        sheet.columns = [
+            {header:'الصورة', key:'img', width:15},
+            {header:'الصنف', key:'name', width:25},
+            {header:'الباركود', key:'barcode', width:20},
+            {header:'القسم', key:'dept', width:20},
+            {header:'الكمية', key:'qty', width:10},
+            {header:'الحالة', key:'status', width:15}
+        ];
+
+        const snap = await db.ref('assets').once('value');
+        let rIdx = 2;
+        
+        snap.forEach(child => {
+            const item = child.val();
+            if(item.archived) return; // تصدير النشط فقط
+
+            const row = sheet.addRow(item);
+            row.height = 65;
+            row.alignment = {vertical:'middle', horizontal:'center'};
+
+            if(item.image) {
+                try {
+                    const imgId = workbook.addImage({base64: item.image, extension:'jpeg'});
+                    sheet.addImage(imgId, {tl:{col:0, row:rIdx-1}, ext:{width:60, height:60}});
+                } catch(e){}
+            }
+            rIdx++;
+        });
+
+        const buf = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buf]), `Inventory_Full_${new Date().toLocaleDateString()}.xlsx`);
+    }
+
+    // تشغيل العرض عند البدء
+    loadData();
+</script>
+</body>
+</html>
