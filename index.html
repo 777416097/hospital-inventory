@@ -81,9 +81,9 @@
 </div> 
 
 <script>
-    // --- إعدادات Firebase ---
+    // --- إعدادات Firebase المحدثة ---
     const firebaseConfig = {
-        apiKey: "AIzaSyDqF69vfiboCuIyJmT73ftwu0zUOeqGAqQ",
+        apiKey: "AIzaSyBe1i8kV97eVExZ-ybeD9vDIZuACmvFlEg", // تم التحديث للمفتاح الجديد
         authDomain: "hospital-app-69f54.firebaseapp.com",
         projectId: "hospital-app-69f54",
         databaseURL: "https://hospital-app-69f54-default-rtdb.firebaseio.com",
@@ -91,7 +91,11 @@
         messagingSenderId: "304416015250",
         appId: "1:304416015250:web:c327a0e6120ed2a19d374b"
     }; 
-    firebase.initializeApp(firebaseConfig);
+    
+    // بدء تشغيل Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.database(); 
 
     let isArchiveMode = false;
@@ -136,27 +140,34 @@
         const file = document.getElementById('assetImage').files[0];
         let imageData = "";
         
-        if(file) imageData = await compressImage(file);
-        else if(id) {
-            const snap = await db.ref('assets/' + id).once('value');
-            imageData = snap.val().image || "";
+        try {
+            if(file) imageData = await compressImage(file);
+            else if(id) {
+                const snap = await db.ref('assets/' + id).once('value');
+                imageData = snap.val().image || "";
+            }
+
+            const data = {
+                name: document.getElementById('assetName').value,
+                barcode: document.getElementById('assetBarcode').value,
+                dept: document.getElementById('assetDept').value,
+                qty: document.getElementById('assetQty').value,
+                status: document.getElementById('assetStatus').value,
+                image: imageData,
+                archived: false
+            };
+
+            if(!data.name || !data.barcode) return alert("الاسم والباركود مطلوبان");
+
+            if(id) await db.ref('assets/' + id).update(data);
+            else await db.ref('assets').push(data);
+            
+            alert("تم حفظ البيانات بنجاح ✅");
+            resetForm();
+        } catch (error) {
+            console.error(error);
+            alert("حدث خطأ أثناء الحفظ، تأكد من اتصال الإنترنت وقواعد الحماية.");
         }
-
-        const data = {
-            name: document.getElementById('assetName').value,
-            barcode: document.getElementById('assetBarcode').value,
-            dept: document.getElementById('assetDept').value,
-            qty: document.getElementById('assetQty').value,
-            status: document.getElementById('assetStatus').value,
-            image: imageData,
-            archived: false
-        };
-
-        if(!data.name || !data.barcode) return alert("الاسم والباركود مطلوبان");
-
-        if(id) await db.ref('assets/' + id).update(data);
-        else await db.ref('assets').push(data);
-        resetForm();
     }
 
     function archiveAsset(id) {
@@ -206,6 +217,11 @@
                         </td>
                     </tr>`;
             });
+        }, (error) => {
+            console.error("Firebase Error:", error);
+            if(error.message.includes("permission_denied")) {
+                alert("تم رفض الوصول للقاعدة. يرجى مراجعة القواعد (Rules) في Firebase Console.");
+            }
         });
     }
 
