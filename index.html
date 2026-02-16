@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> 
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png">
-    <title>نظام جرد المستشفى الذكي - النسخة الكاملة</title>
+    <title>نظام جرد المستشفى الذكي - المحمي</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script> 
     <script src="https://unpkg.com/html5-qrcode"></script> 
@@ -16,32 +17,49 @@
         :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; --danger: #e74c3c; --warning: #f1c40f; --archive: #8e44ad; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; direction: rtl; }
         .container { max-width: 1000px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        
+        /* شاشة تسجيل الدخول */
+        #login-screen { max-width: 400px; margin: 100px auto; text-align: center; padding: 30px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .login-input { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+        
+        #main-app { display: none; } /* مخفي حتى تسجيل الدخول */
+        
         h2 { text-align: center; color: var(--primary); border-bottom: 2px solid var(--secondary); padding-bottom: 10px; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 15px; }
         .form-group { display: flex; flex-direction: column; }
         label { font-weight: bold; margin-bottom: 5px; font-size: 0.9em; color: #555; }
         input, select { padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; transition: 0.3s; }
-        input:focus { border-color: var(--secondary); }
+        
         .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
         button { border: none; padding: 12px; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; flex: 1; min-width: 120px; transition: 0.3s; }
+        button:disabled { background: #ccc !important; cursor: not-allowed; }
+        
         .btn-save { background: var(--secondary); }
         .btn-excel { background: var(--success); }
-        .btn-archive-toggle { background: var(--archive); }
+        .btn-logout { background: #34495e; margin-top: 10px; width: 100%; }
+        
         #reader { width: 100%; max-width: 400px; margin: 10px auto; display: none; border: 3px solid var(--secondary); border-radius: 12px; }
         .search-box { width: 100%; padding: 15px; margin-bottom: 15px; border: 2px solid #eee; border-radius: 30px; text-align: center; font-size: 16px; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
         th { background: var(--primary); color: white; }
         .asset-img { width: 50px; height: 50px; object-fit: cover; border-radius: 5px; }
-        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; color: white; }
         .mode-indicator { text-align: center; padding: 10px; margin-bottom: 10px; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
-<body> 
+<body>
 
-<div class="container">
-    <h2>🏥 نظام جر  د المستشفى الذكي</h2> 
- 
+<div id="login-screen">
+    <h2>🔐 دخول النظام</h2>
+    <input type="email" id="email" class="login-input" placeholder="البريد الإلكتروني">
+    <input type="password" id="password" class="login-input" placeholder="كلمة المرور">
+    <button onclick="login()" class="btn-save" style="width: 100%;">تسجيل الدخول</button>
+    <p id="login-error" style="color:red; font-size: 0.8em; margin-top: 10px;"></p>
+</div>
+
+<div id="main-app" class="container">
+    <h2>🏥 نظام جرد المستشفى الذكي</h2> 
     <div id="ui-mode" class="mode-indicator" style="background: #e1f5fe; color: #0288d1;">القائمة النشطة</div>
 
     <div class="no-print">
@@ -64,7 +82,7 @@
         <div class="btn-group">
             <button onclick="handleSave()" class="btn-save" id="saveBtn">💾 حفظ البيانات</button>
             <button onclick="exportToExcel()" class="btn-excel">📊 تصدير Excel</button>
-            <button onclick="toggleArchiveMode()" class="btn-archive-toggle" id="archiveToggleBtn">📂 عرض الأرشيف</button>
+            <button onclick="toggleArchiveMode()" class="btn-archive-toggle" id="archiveToggleBtn" style="background:var(--archive)">📂 عرض الأرشيف</button>
         </div> 
 
         <input type="text" id="searchInput" onkeyup="searchTable()" class="search-box" placeholder="🔍 ابحث بالاسم، الباركود أو القسم...">
@@ -78,12 +96,14 @@
             <tbody id="tableBody"></tbody>
         </table>
     </div>
+
+    <button onclick="logout()" class="btn-logout">🔴 تسجيل الخروج</button>
 </div> 
 
 <script>
-    // --- إعدادات Firebase المحدثة ---
+    // --- إعدادات Firebase ---
     const firebaseConfig = {
-        apiKey: "AIzaSyBe1i8kV97eVExZ-ybeD9vDIZuACmvFlEg", // تم التحديث للمفتاح الجديد
+        apiKey: "AIzaSyBe1i8kV97eVExZ-ybeD9vDIZuACmvFlEg",
         authDomain: "hospital-app-69f54.firebaseapp.com",
         projectId: "hospital-app-69f54",
         databaseURL: "https://hospital-app-69f54-default-rtdb.firebaseio.com",
@@ -92,16 +112,37 @@
         appId: "1:304416015250:web:c327a0e6120ed2a19d374b"
     }; 
     
-    // بدء تشغيل Firebase
-    if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    // --- نظام الحماية (Auth) ---
+    function login() {
+        const email = document.getElementById('email').value;
+        const pass = document.getElementById('password').value;
+        auth.signInWithEmailAndPassword(email, pass)
+            .catch(err => document.getElementById('login-error').innerText = "خطأ: تأكد من البيانات");
     }
-    const db = firebase.database(); 
 
+    function logout() {
+        auth.signOut();
+    }
+
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            loadData();
+        } else {
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('main-app').style.display = 'none';
+        }
+    });
+
+    // --- وظائف الجرد (نفس الكود السابق مع تحسينات) ---
     let isArchiveMode = false;
-
-    // --- تشغيل الكاميرا ---
     let html5QrCode;
+
     async function startScanner() {
         if(document.getElementById('assetBarcode').value !== "") return;
         document.getElementById('reader').style.display = 'block';
@@ -114,9 +155,9 @@
             });
         } catch (e) { document.getElementById('reader').style.display = 'none'; }
     }
+
     function stopScanner() { if(html5QrCode) html5QrCode.stop().then(()=> document.getElementById('reader').style.display='none'); }
 
-    // --- معالجة الصور ---
     async function compressImage(file) {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -134,13 +175,16 @@
         });
     }
 
-    // --- الحفظ والأرشفة ---
     async function handleSave() {
+        const saveBtn = document.getElementById('saveBtn');
         const id = document.getElementById('edit-id').value;
         const file = document.getElementById('assetImage').files[0];
-        let imageData = "";
         
+        saveBtn.disabled = true;
+        saveBtn.innerText = "جاري الحفظ...";
+
         try {
+            let imageData = "";
             if(file) imageData = await compressImage(file);
             else if(id) {
                 const snap = await db.ref('assets/' + id).once('value');
@@ -154,46 +198,23 @@
                 qty: document.getElementById('assetQty').value,
                 status: document.getElementById('assetStatus').value,
                 image: imageData,
-                archived: false
+                archived: false,
+                lastUpdatedBy: auth.currentUser.email
             };
 
-            if(!data.name || !data.barcode) return alert("الاسم والباركود مطلوبان");
+            if(!data.name || !data.barcode) throw new Error("الاسم والباركود مطلوبان");
 
             if(id) await db.ref('assets/' + id).update(data);
             else await db.ref('assets').push(data);
             
-            alert("تم حفظ البيانات بنجاح ✅");
+            alert("تم الحفظ بنجاح ✅");
             resetForm();
         } catch (error) {
-            console.error(error);
-            alert("حدث خطأ أثناء الحفظ، تأكد من اتصال الإنترنت وقواعد الحماية.");
+            alert(error.message);
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerText = "💾 حفظ البيانات";
         }
-    }
-
-    function archiveAsset(id) {
-        if(confirm("نقل الصنف للأرشيف؟")) db.ref('assets/' + id).update({ archived: true });
-    }
-
-    function restoreAsset(id) {
-        if(confirm("استعادة الصنف للقائمة النشطة؟")) db.ref('assets/' + id).update({ archived: false });
-    }
-
-    // --- نظام العرض المتغير (نشط / مؤرشف) ---
-    function toggleArchiveMode() {
-        isArchiveMode = !isArchiveMode;
-        const btn = document.getElementById('archiveToggleBtn');
-        const indicator = document.getElementById('ui-mode');
-        
-        if(isArchiveMode) {
-            btn.innerText = "🔙 العودة للنشط";
-            indicator.innerText = "📂 سجلات الأرشيف (المحذوفات)";
-            indicator.style.background = "#f3e5f5"; indicator.style.color = "#7b1fa2";
-        } else {
-            btn.innerText = "📂 عرض الأرشيف";
-            indicator.innerText = "القائمة النشطة";
-            indicator.style.background = "#e1f5fe"; indicator.style.color = "#0288d1";
-        }
-        loadData();
     }
 
     function loadData() {
@@ -208,24 +229,28 @@
                     <tr>
                         <td><img src="${item.image || 'https://via.placeholder.com/50'}" class="asset-img"></td>
                         <td>${item.name}</td><td>${item.barcode}</td><td>${item.dept}</td><td>${item.qty}</td>
-                        <td class="action-btns">
+                        <td>
                             ${isArchiveMode ? 
-                                `<button onclick="restoreAsset('${child.key}')" style="background:var(--success)">🔄 استعادة</button>` : 
+                                `<button onclick="restoreAsset('${child.key}')" style="background:var(--success)">🔄</button>` : 
                                 `<button onclick="editAsset('${child.key}')" style="background:var(--warning);color:black">📝</button>
                                  <button onclick="archiveAsset('${child.key}')" style="background:var(--danger)">🗑️</button>`
                             }
                         </td>
                     </tr>`;
             });
-        }, (error) => {
-            console.error("Firebase Error:", error);
-            if(error.message.includes("permission_denied")) {
-                alert("تم رفض الوصول للقاعدة. يرجى مراجعة القواعد (Rules) في Firebase Console.");
-            }
         });
     }
 
-    // --- تعديل وبحث ---
+    function toggleArchiveMode() {
+        isArchiveMode = !isArchiveMode;
+        document.getElementById('archiveToggleBtn').innerText = isArchiveMode ? "🔙 النشط" : "📂 الأرشيف";
+        document.getElementById('ui-mode').innerText = isArchiveMode ? "📂 الأرشيف" : "القائمة النشطة";
+        loadData();
+    }
+
+    function archiveAsset(id) { if(confirm("أرشفة الصنف؟")) db.ref('assets/' + id).update({ archived: true }); }
+    function restoreAsset(id) { if(confirm("استعادة الصنف؟")) db.ref('assets/' + id).update({ archived: false }); }
+
     async function editAsset(id) {
         const snap = await db.ref('assets/' + id).once('value');
         const item = snap.val();
@@ -239,7 +264,7 @@
     }
 
     function resetForm() {
-        document.querySelectorAll('input').forEach(i => i.value="");
+        document.querySelectorAll('.form-grid input').forEach(i => i.value="");
         document.getElementById('edit-id').value = "";
         document.getElementById('saveBtn').innerText = "💾 حفظ البيانات";
     }
@@ -251,45 +276,20 @@
         });
     }
 
-    // --- تصدير إكسل لجميع الصفوف ---
     async function exportToExcel() {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('جرد المستشفى');
         sheet.columns = [
-            {header:'الصورة', key:'img', width:15},
             {header:'الصنف', key:'name', width:25},
             {header:'الباركود', key:'barcode', width:20},
             {header:'القسم', key:'dept', width:20},
-            {header:'الكمية', key:'qty', width:10},
-            {header:'الحالة', key:'status', width:15}
+            {header:'الكمية', key:'qty', width:10}
         ];
-
         const snap = await db.ref('assets').once('value');
-        let rIdx = 2;
-        
-        snap.forEach(child => {
-            const item = child.val();
-            if(item.archived) return; // تصدير النشط فقط
-
-            const row = sheet.addRow(item);
-            row.height = 65;
-            row.alignment = {vertical:'middle', horizontal:'center'};
-
-            if(item.image) {
-                try {
-                    const imgId = workbook.addImage({base64: item.image, extension:'jpeg'});
-                    sheet.addImage(imgId, {tl:{col:0, row:rIdx-1}, ext:{width:60, height:60}});
-                } catch(e){}
-            }
-            rIdx++;
-        });
-
+        snap.forEach(child => { if(!child.val().archived) sheet.addRow(child.val()); });
         const buf = await workbook.xlsx.writeBuffer();
-        saveAs(new Blob([buf]), `Inventory_Full_${new Date().toLocaleDateString()}.xlsx`);
+        saveAs(new Blob([buf]), `Inventory_${new Date().toLocaleDateString()}.xlsx`);
     }
-
-    // تشغيل العرض عند البدء
-    loadData();
 </script>
 </body>
 </html>
