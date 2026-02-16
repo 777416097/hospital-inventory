@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> 
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png">
-    <title>نظام جرد المستشفى الذكي - المحمي</title>
+    <title>نظام جرد المستشفى - Admin</title>
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
@@ -12,6 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script> 
     <script src="https://unpkg.com/html5-qrcode"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
     <style>
         :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; --danger: #e74c3c; --warning: #f1c40f; --archive: #8e44ad; }
@@ -19,74 +20,82 @@
         .container { max-width: 1000px; margin: auto; background: white; padding: 15px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
         
         /* شاشة تسجيل الدخول */
-        #login-screen { max-width: 400px; margin: 100px auto; text-align: center; padding: 30px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .login-input { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; }
+        #login-screen { max-width: 400px; margin: 80px auto; text-align: center; padding: 30px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .login-input { width: 90%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
         
-        #main-app { display: none; } /* مخفي حتى تسجيل الدخول */
+        #main-app { display: none; }
         
         h2 { text-align: center; color: var(--primary); border-bottom: 2px solid var(--secondary); padding-bottom: 10px; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 15px; }
         .form-group { display: flex; flex-direction: column; }
         label { font-weight: bold; margin-bottom: 5px; font-size: 0.9em; color: #555; }
-        input, select { padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; transition: 0.3s; }
+        input, select { padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; }
         
         .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
-        button { border: none; padding: 12px; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; flex: 1; min-width: 120px; transition: 0.3s; }
-        button:disabled { background: #ccc !important; cursor: not-allowed; }
+        button { border: none; padding: 10px; border-radius: 8px; cursor: pointer; color: white; font-weight: bold; flex: 1; min-width: 100px; transition: 0.3s; }
+        button:active { transform: scale(0.95); }
         
         .btn-save { background: var(--secondary); }
         .btn-excel { background: var(--success); }
-        .btn-logout { background: #34495e; margin-top: 10px; width: 100%; }
+        .btn-logout { background: #34495e; width: 100%; margin-top: 20px; }
         
-        #reader { width: 100%; max-width: 400px; margin: 10px auto; display: none; border: 3px solid var(--secondary); border-radius: 12px; }
-        .search-box { width: 100%; padding: 15px; margin-bottom: 15px; border: 2px solid #eee; border-radius: 30px; text-align: center; font-size: 16px; }
+        #reader { width: 100%; max-width: 350px; margin: 10px auto; display: none; border: 3px solid var(--secondary); border-radius: 12px; }
+        .search-box { width: 100%; padding: 15px; margin-bottom: 15px; border: 2px solid #eee; border-radius: 30px; text-align: center; font-size: 16px; box-sizing: border-box; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #eee; padding: 10px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        th, td { border: 1px solid #eee; padding: 8px; text-align: center; }
         th { background: var(--primary); color: white; }
-        .asset-img { width: 50px; height: 50px; object-fit: cover; border-radius: 5px; }
-        .mode-indicator { text-align: center; padding: 10px; margin-bottom: 10px; border-radius: 8px; font-weight: bold; }
+        .asset-img { width: 45px; height: 45px; object-fit: cover; border-radius: 5px; }
+        
+        .action-btns { display: flex; gap: 4px; justify-content: center; }
+        .btn-action { min-width: 35px; padding: 8px; font-size: 14px; }
+
+        /* تنسيق الطباعة */
+        @media print {
+            body * { visibility: hidden; }
+            #print-section, #print-section * { visibility: visible; }
+            #print-section { position: absolute; left: 0; top: 0; width: 100%; text-align: center; }
+        }
     </style>
 </head>
 <body>
 
 <div id="login-screen">
-    <h2>🔐 دخول النظام</h2>
-    <input type="email" id="email" class="login-input" placeholder="البريد الإلكتروني">
+    <img src="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" width="80" alt="logo"><br>
+    <h2>🏥 دخول المشرف</h2>
+    <input type="email" id="email" class="login-input" placeholder="Admin@hospital.com">
     <input type="password" id="password" class="login-input" placeholder="كلمة المرور">
-    <button onclick="login()" class="btn-save" style="width: 100%;">تسجيل الدخول</button>
-    <p id="login-error" style="color:red; font-size: 0.8em; margin-top: 10px;"></p>
+    <button onclick="login()" class="btn-save" style="width: 100%; font-size: 18px;">تسجيل الدخول</button>
+    <p id="login-error" style="color:red; font-size: 0.9em; margin-top: 10px;"></p>
 </div>
 
 <div id="main-app" class="container">
-    <h2>🏥 نظام جرد المستشفى الذكي</h2> 
-    <div id="ui-mode" class="mode-indicator" style="background: #e1f5fe; color: #0288d1;">القائمة النشطة</div>
+    <h2>📋 نظام الجرد الذكي</h2> 
+    <div id="ui-mode" style="text-align:center; padding:5px; margin-bottom:10px; border-radius:5px; font-weight:bold; background:#e1f5fe; color:#0288d1;">القائمة النشطة</div>
 
-    <div class="no-print">
-        <input type="hidden" id="edit-id">
-        <div id="reader"></div> 
-        <div class="form-grid">
-            <div class="form-group"><label>الصنف</label><input type="text" id="assetName"></div>
-            <div class="form-group"><label>الباركود</label><input type="text" id="assetBarcode" onfocus="startScanner()"></div>
-            <div class="form-group"><label>القسم</label><input type="text" id="assetDept"></div>
-            <div class="form-group"><label>الكمية</label><input type="number" id="assetQty" value="1"></div>
-            <div class="form-group">
-                <label>الحالة</label>
-                <select id="assetStatus">
-                    <option>جديد</option><option>مستعمل</option><option>صيانة</option><option>تالف</option>
-                </select>
-            </div>
-            <div class="form-group"><label>الصورة</label><input type="file" id="assetImage" accept="image/*"></div>
-        </div> 
-
-        <div class="btn-group">
-            <button onclick="handleSave()" class="btn-save" id="saveBtn">💾 حفظ البيانات</button>
-            <button onclick="exportToExcel()" class="btn-excel">📊 تصدير Excel</button>
-            <button onclick="toggleArchiveMode()" class="btn-archive-toggle" id="archiveToggleBtn" style="background:var(--archive)">📂 عرض الأرشيف</button>
-        </div> 
-
-        <input type="text" id="searchInput" onkeyup="searchTable()" class="search-box" placeholder="🔍 ابحث بالاسم، الباركود أو القسم...">
+    <div id="reader"></div> 
+    <div class="form-grid">
+        <div class="form-group"><label>الصنف</label><input type="text" id="assetName"></div>
+        <div class="form-group"><label>الباركود</label><input type="text" id="assetBarcode" onfocus="startScanner()"></div>
+        <div class="form-group"><label>القسم</label><input type="text" id="assetDept"></div>
+        <div class="form-group"><label>الكمية</label><input type="number" id="assetQty" value="1"></div>
+        <div class="form-group">
+            <label>الحالة</label>
+            <select id="assetStatus">
+                <option>جديد</option><option>مستعمل</option><option>صيانة</option><option>تالف</option>
+            </select>
+        </div>
+        <div class="form-group"><label>الصورة</label><input type="file" id="assetImage" accept="image/*"></div>
     </div> 
+
+    <div class="btn-group">
+        <button onclick="handleSave()" class="btn-save" id="saveBtn">💾 حفظ</button>
+        <button onclick="exportToExcel()" class="btn-excel">📊 Excel</button>
+        <button onclick="toggleArchiveMode()" id="archiveToggleBtn" style="background:var(--archive)">📂 الأرشيف</button>
+        <button onclick="resetForm()" style="background:#95a5a6">🧹 تفريغ</button>
+    </div> 
+
+    <input type="text" id="searchInput" onkeyup="searchTable()" class="search-box" placeholder="🔍 ابحث بالاسم أو الباركود...">
 
     <div style="overflow-x: auto;">
         <table>
@@ -97,11 +106,16 @@
         </table>
     </div>
 
-    <button onclick="logout()" class="btn-logout">🔴 تسجيل الخروج</button>
-</div> 
+    <button onclick="logout()" class="btn-logout">🔴 خروج</button>
+</div>
+
+<div id="print-section" style="display:none;">
+    <h3 id="print-name"></h3>
+    <svg id="barcode-canvas"></svg>
+</div>
 
 <script>
-    // --- إعدادات Firebase ---
+    // --- Firebase Setup ---
     const firebaseConfig = {
         apiKey: "AIzaSyBe1i8kV97eVExZ-ybeD9vDIZuACmvFlEg",
         authDomain: "hospital-app-69f54.firebaseapp.com",
@@ -116,17 +130,15 @@
     const db = firebase.database();
     const auth = firebase.auth();
 
-    // --- نظام الحماية (Auth) ---
+    // --- Authentication ---
     function login() {
         const email = document.getElementById('email').value;
         const pass = document.getElementById('password').value;
-        auth.signInWithEmailAndPassword(email, pass)
-            .catch(err => document.getElementById('login-error').innerText = "خطأ: تأكد من البيانات");
+        auth.signInWithEmailAndPassword(email, pass).catch(err => {
+            document.getElementById('login-error').innerText = "بيانات الدخول غير صحيحة!";
+        });
     }
-
-    function logout() {
-        auth.signOut();
-    }
+    function logout() { auth.signOut(); }
 
     auth.onAuthStateChanged(user => {
         if (user) {
@@ -139,54 +151,37 @@
         }
     });
 
-    // --- وظائف الجرد (نفس الكود السابق مع تحسينات) ---
+    // --- Core Functions ---
     let isArchiveMode = false;
     let html5QrCode;
 
-    async function startScanner() {
+    function startScanner() {
         if(document.getElementById('assetBarcode').value !== "") return;
-        document.getElementById('reader').style.display = 'block';
+        const reader = document.getElementById('reader');
+        reader.style.display = 'block';
         html5QrCode = new Html5Qrcode("reader");
-        try {
-            await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (text) => {
-                document.getElementById('assetBarcode').value = text;
-                stopScanner();
-                document.getElementById('assetDept').focus();
-            });
-        } catch (e) { document.getElementById('reader').style.display = 'none'; }
-    }
-
-    function stopScanner() { if(html5QrCode) html5QrCode.stop().then(()=> document.getElementById('reader').style.display='none'); }
-
-    async function compressImage(file) {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (e) => {
-                const img = new Image();
-                img.src = e.target.result;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 300; canvas.height = (img.height * 300) / img.width;
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
-                };
-            };
-        });
+        html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (text) => {
+            document.getElementById('assetBarcode').value = text;
+            html5QrCode.stop();
+            reader.style.display = 'none';
+        }).catch(()=>{});
     }
 
     async function handleSave() {
-        const saveBtn = document.getElementById('saveBtn');
+        const btn = document.getElementById('saveBtn');
         const id = document.getElementById('edit-id').value;
-        const file = document.getElementById('assetImage').files[0];
-        
-        saveBtn.disabled = true;
-        saveBtn.innerText = "جاري الحفظ...";
+        btn.disabled = true; btn.innerText = "جاري الحفظ...";
 
         try {
+            const file = document.getElementById('assetImage').files[0];
             let imageData = "";
-            if(file) imageData = await compressImage(file);
-            else if(id) {
+            if(file) {
+                imageData = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+            } else if(id) {
                 const snap = await db.ref('assets/' + id).once('value');
                 imageData = snap.val().image || "";
             }
@@ -198,58 +193,65 @@
                 qty: document.getElementById('assetQty').value,
                 status: document.getElementById('assetStatus').value,
                 image: imageData,
-                archived: false,
-                lastUpdatedBy: auth.currentUser.email
+                archived: false
             };
 
-            if(!data.name || !data.barcode) throw new Error("الاسم والباركود مطلوبان");
+            if(!data.name || !data.barcode) throw new Error("يرجى ملء الاسم والباركود");
 
             if(id) await db.ref('assets/' + id).update(data);
             else await db.ref('assets').push(data);
             
-            alert("تم الحفظ بنجاح ✅");
+            alert("تم الحفظ بنجاح!");
             resetForm();
-        } catch (error) {
-            alert(error.message);
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.innerText = "💾 حفظ البيانات";
-        }
+        } catch (e) { alert(e.message); }
+        finally { btn.disabled = false; btn.innerText = "💾 حفظ"; }
     }
 
     function loadData() {
-        db.ref('assets').on('value', (snapshot) => {
+        db.ref('assets').on('value', snap => {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = "";
-            snapshot.forEach((child) => {
+            snap.forEach(child => {
                 const item = child.val();
                 if(item.archived !== isArchiveMode) return;
-
                 tbody.innerHTML += `
                     <tr>
                         <td><img src="${item.image || 'https://via.placeholder.com/50'}" class="asset-img"></td>
                         <td>${item.name}</td><td>${item.barcode}</td><td>${item.dept}</td><td>${item.qty}</td>
-                        <td>
-                            ${isArchiveMode ? 
-                                `<button onclick="restoreAsset('${child.key}')" style="background:var(--success)">🔄</button>` : 
-                                `<button onclick="editAsset('${child.key}')" style="background:var(--warning);color:black">📝</button>
-                                 <button onclick="archiveAsset('${child.key}')" style="background:var(--danger)">🗑️</button>`
-                            }
+                        <td class="action-btns">
+                            ${isArchiveMode ? `<button onclick="restoreAsset('${child.key}')" class="btn-action" style="background:var(--success)">🔄</button>` : 
+                            `<button onclick="editAsset('${child.key}')" class="btn-action" style="background:var(--warning)">📝</button>
+                             <button onclick="printBarcode('${item.name}', '${item.barcode}')" class="btn-action" style="background:#2ecc71">🖨️</button>
+                             <button onclick="archiveAsset('${child.key}')" class="btn-action" style="background:var(--danger)">🗑️</button>`}
                         </td>
                     </tr>`;
             });
         });
     }
 
+    function printBarcode(name, code) {
+        document.getElementById('print-name').innerText = name;
+        JsBarcode("#barcode-canvas", code, { format: "CODE128", width: 2, height: 50 });
+        const printArea = document.getElementById('print-section');
+        printArea.style.display = 'block';
+        window.print();
+        printArea.style.display = 'none';
+    }
+
     function toggleArchiveMode() {
         isArchiveMode = !isArchiveMode;
         document.getElementById('archiveToggleBtn').innerText = isArchiveMode ? "🔙 النشط" : "📂 الأرشيف";
-        document.getElementById('ui-mode').innerText = isArchiveMode ? "📂 الأرشيف" : "القائمة النشطة";
         loadData();
     }
 
-    function archiveAsset(id) { if(confirm("أرشفة الصنف؟")) db.ref('assets/' + id).update({ archived: true }); }
-    function restoreAsset(id) { if(confirm("استعادة الصنف؟")) db.ref('assets/' + id).update({ archived: false }); }
+    function archiveAsset(id) { if(confirm("نقل للأرشيف؟")) db.ref('assets/' + id).update({archived: true}); }
+    function restoreAsset(id) { if(confirm("استعادة؟")) db.ref('assets/' + id).update({archived: false}); }
+
+    function resetForm() {
+        document.querySelectorAll('.form-grid input').forEach(i => i.value="");
+        document.getElementById('edit-id').value = "";
+        document.getElementById('saveBtn').innerText = "💾 حفظ";
+    }
 
     async function editAsset(id) {
         const snap = await db.ref('assets/' + id).once('value');
@@ -260,13 +262,6 @@
         document.getElementById('assetQty').value = item.qty;
         document.getElementById('edit-id').value = id;
         document.getElementById('saveBtn').innerText = "🔄 تحديث";
-        window.scrollTo(0,0);
-    }
-
-    function resetForm() {
-        document.querySelectorAll('.form-grid input').forEach(i => i.value="");
-        document.getElementById('edit-id').value = "";
-        document.getElementById('saveBtn').innerText = "💾 حفظ البيانات";
     }
 
     function searchTable() {
@@ -278,15 +273,10 @@
 
     async function exportToExcel() {
         const workbook = new ExcelJS.Workbook();
-        const sheet = workbook.addWorksheet('جرد المستشفى');
-        sheet.columns = [
-            {header:'الصنف', key:'name', width:25},
-            {header:'الباركود', key:'barcode', width:20},
-            {header:'القسم', key:'dept', width:20},
-            {header:'الكمية', key:'qty', width:10}
-        ];
+        const sheet = workbook.addWorksheet('Inventory');
+        sheet.columns = [{header:'Name',key:'name'}, {header:'Barcode',key:'barcode'}, {header:'Dept',key:'dept'}, {header:'Qty',key:'qty'}];
         const snap = await db.ref('assets').once('value');
-        snap.forEach(child => { if(!child.val().archived) sheet.addRow(child.val()); });
+        snap.forEach(c => { if(!c.val().archived) sheet.addRow(c.val()); });
         const buf = await workbook.xlsx.writeBuffer();
         saveAs(new Blob([buf]), `Inventory_${new Date().toLocaleDateString()}.xlsx`);
     }
